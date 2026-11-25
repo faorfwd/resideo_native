@@ -411,6 +411,24 @@ class NativeClient(ScheduleClientMixin, ScheduleModesMixin):
                 body["HoldUntil"] = next_period
             await self._request("PUT", self._path(device, "hold"), body)
 
+    async def set_temperature_until(
+        self,
+        device_id: str,
+        until: str,
+        *,
+        heat: float | None = None,
+        cool: float | None = None,
+    ) -> None:
+        # A setpoint write has no end time, so the hold is bounded by a second call.
+        await self.set_temperature(device_id, heat=heat, cool=cool, hold="TemporaryHold")
+        async with self._command_lock:
+            device = self._device(device_id)
+            await self._request(
+                "PUT",
+                self._path(device, "hold"),
+                {"Status": "TemporaryHold", "HoldUntil": until},
+            )
+
     def _hot_water_device(self, device_id: str) -> Thermostat:
         device = self._device(device_id)
         zone = device.hot_water

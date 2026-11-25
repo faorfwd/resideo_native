@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
+
+import probatio as vol
 
 from homeassistant.components.climate import (
     PRESET_NONE,
@@ -15,9 +18,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import CONF_DEFAULT_HOLD, DEFAULT_HOLD, DOMAIN, SCHEDULE_EDITOR_PATH
 from .coordinator import ResideoCoordinator
@@ -44,6 +50,17 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     register_schedule_actions(False)
+    entity_platform.async_get_current_platform().async_register_entity_service(
+        "set_hold_until",
+        {
+            vol.Required(ATTR_TEMPERATURE): vol.Coerce(float),
+            vol.Required("duration"): vol.All(
+                cv.time_period,
+                vol.Range(min=timedelta(minutes=1), max=timedelta(hours=12)),
+            ),
+        },
+        "async_set_hold_until",
+    )
     coordinator: ResideoCoordinator = entry.runtime_data
     known: set[str] = set()
 
@@ -298,6 +315,20 @@ class ResideoThermostat(ScheduleEntityMixin, CoordinatorEntity[ResideoCoordinato
         await self.coordinator.async_command(
             self.coordinator.client.set_temperature(
                 self.device_id, **{kind: temperature}, hold=hold
+            )
+        )
+
+    async def async_set_hold_until(self, temperature: float, duration: timedelta) -> None:
+        if not self.device:
+            raise HomeAssistantError("The thermostat is unavailable")
+        kind = self._temperature_kind()
+        if self.hvac_mode not in (HVACMode.HEAT, HVACMode.COOL) or kind is None:
+            raise HomeAssistantError("A timed hold requires heating or cooling mode")
+        # The thermostat takes a wall-clock time; assumes it shares HA's time zone.
+        until = (dt_util.now() + duration).strftime("%H:%M:00")
+        await self.coordinator.async_command(
+            self.coordinator.client.set_temperature_until(
+                self.device_id, until, **{kind: temperature}
             )
         )
 
