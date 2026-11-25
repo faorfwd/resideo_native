@@ -326,7 +326,8 @@ class ResideoThermostat(ScheduleEntityMixin, CoordinatorEntity[ResideoCoordinato
             raise HomeAssistantError("A timed hold requires heating or cooling mode")
         # The thermostat takes a wall-clock time; assumes it shares HA's time zone.
         # The app offers 10-minute steps; round up so the hold is never shorter.
-        end = dt_util.now() + duration
+        # Add in UTC so a DST change inside the hold does not shift the end by an hour.
+        end = dt_util.as_local(dt_util.utcnow() + duration)
         step = timedelta(minutes=10)
         excess = timedelta(minutes=end.minute % 10, seconds=end.second, microseconds=end.microsecond)
         if excess:

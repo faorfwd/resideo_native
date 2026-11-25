@@ -423,7 +423,14 @@ class NativeClient(ScheduleClientMixin, ScheduleModesMixin):
         # A setpoint write has no end time, so the hold is bounded by a second call.
         await self.set_temperature(device_id, heat=heat, cool=cool, hold="TemporaryHold")
         try:
-            await self._put_timed_hold(device_id, until)
+            async with self._command_lock:
+                device = self._device(device_id)
+                # An arbitrary end time needs HoldUntil; TemporaryHold is rejected with HTTP 400.
+                await self._request(
+                    "PUT",
+                    self._path(device, "hold"),
+                    {"Status": "HoldUntil", "HoldUntil": until},
+                )
         except ResideoError:
             # Never leave the new setpoint held until the next schedule period.
             try:
@@ -431,30 +438,6 @@ class NativeClient(ScheduleClientMixin, ScheduleModesMixin):
             except ResideoError:
                 _LOGGER.warning("Could not release the hold after a failed timed hold")
             raise
-
-    async def _put_timed_hold(self, device_id: str, until: str) -> None:
-        # Beta probe: the accepted body is unknown, so try candidates and log the winner.
-        rejected = []
-        async with self._command_lock:
-            device = self._device(device_id)
-            for status, value in (
-                ("HoldUntil", until),
-                ("TemporaryHold", until[:5]),
-                ("HoldUntil", until[:5]),
-            ):
-                try:
-                    await self._request(
-                        "PUT", self._path(device, "hold"), {"Status": status, "HoldUntil": value}
-                    )
-                except CommandError as err:
-                    rejected.append(f"{status} {value}: {err}")
-                    continue
-                _LOGGER.warning(
-                    "Timed hold accepted with Status=%s HoldUntil=%s; rejected before: %s",
-                    status, value, rejected,
-                )
-                return
-        raise CommandError(" | ".join(rejected))
 
     def _hot_water_device(self, device_id: str) -> Thermostat:
         device = self._device(device_id)

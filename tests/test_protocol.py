@@ -543,7 +543,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.client, "_request", request):
             with self.assertRaises(CommandError):
                 await self.client.set_temperature_until("T6-test", "14:30:00", heat=22.5)
-        self.assertEqual(len(sent), 5)
+        self.assertEqual(len(sent), 3)
         self.assertEqual(sent[-1], {"Status": "NoHold"})
 
     async def test_invalid_and_unsupported_commands_never_reach_network(self):

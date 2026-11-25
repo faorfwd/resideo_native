@@ -428,6 +428,29 @@ Manual temperature changes use **Temporary hold** by default. An active permanen
 
 In automatic heat/cool mode, set the low and high targets together. The integration validates device limits and deadband before sending them. When changing both HVAC mode and temperature, set the mode first, then set the temperature in a separate action.
 
+### Timed hold
+
+`resideo_native.set_hold_until` sets a temporary setpoint that the thermostat itself ends, so it returns to its schedule even if Home Assistant stops in the meantime.
+
+```yaml
+action: resideo_native.set_hold_until
+target:
+  entity_id: climate.thermostat
+data:
+  temperature: 22.5
+  duration:
+    minutes: 30
+```
+
+- The duration is 1 minute to 12 hours. The end time is rounded **up** to the next 10 minutes, as in the Resideo app, so a hold can last up to 10 minutes longer than requested.
+- The end is sent as a wall-clock time. Home Assistant and the thermostat must use the same time zone.
+- Heating or cooling mode only, not automatic heat/cool.
+- The end time is not clipped to the next schedule period; limit the duration yourself if the schedule must win.
+- If Resideo rejects the end time, the integration releases the hold and the action fails.
+- While a timed hold is active, `next_period_time` may not reflect the schedule.
+
+Tested on a Lyric T6 (Jasper) with heating only.
+
 ### Temperature conversion
 
 Jasper/T6 devices return Fahrenheit numeric values on their API even when their preferred display unit is Celsius. Version **0.1.2** converts readings, targets, and bounds to the preferred unit and converts commands back to the device's API encoding.
