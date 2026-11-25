@@ -182,7 +182,7 @@ async def test_set_hold_until_converts_duration_to_wall_clock(hass, entry, clien
         },
         blocking=True,
     )
-    client.set_temperature_until.assert_awaited_once_with("T6-test", "00:20:00", heat=22.5)
+    client.set_temperature_until.assert_awaited_once_with("T6-test", "00:30:00", heat=22.5)
 
 
 async def test_unsupported_cooling_is_not_sent(hass, entry, client):

@@ -1,6 +1,6 @@
 {
   "name": "resideo-native-editor-tests",
-  "version": "0.3.6b1",
+  "version": "0.3.6b2",
   "private": true,
   "type": "module",
   "scripts": {

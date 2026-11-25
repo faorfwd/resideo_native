@@ -28,6 +28,7 @@ from .errors import (
     InteractionRequired,
     InvalidResponse,
     RateLimited,
+    ResideoError,
 )
 from .hot_water import DHW_BOOST_MINUTES
 from .rooms import (
@@ -186,7 +187,7 @@ class NativeClient(ScheduleClientMixin, ScheduleModesMixin):
                     if not 200 <= response.status < 300:
                         if method != "GET":
                             message = f"Resideo rejected the command (HTTP {response.status})"
-                            if path.endswith(("/ThermostatSchedule", "/dhw/schedule", "/Schedule/Status")):
+                            if path.endswith(("/ThermostatSchedule", "/dhw/schedule", "/Schedule/Status", "/hold")):
                                 secrets = [token, self.account_id, self.username]
                                 for device in self.devices.values():
                                     secrets.extend([device.device_id, device.location_id, device.name])
@@ -421,13 +422,39 @@ class NativeClient(ScheduleClientMixin, ScheduleModesMixin):
     ) -> None:
         # A setpoint write has no end time, so the hold is bounded by a second call.
         await self.set_temperature(device_id, heat=heat, cool=cool, hold="TemporaryHold")
+        try:
+            await self._put_timed_hold(device_id, until)
+        except ResideoError:
+            # Never leave the new setpoint held until the next schedule period.
+            try:
+                await self.set_hold(device_id, "NoHold")
+            except ResideoError:
+                _LOGGER.warning("Could not release the hold after a failed timed hold")
+            raise
+
+    async def _put_timed_hold(self, device_id: str, until: str) -> None:
+        # Beta probe: the accepted body is unknown, so try candidates and log the winner.
+        rejected = []
         async with self._command_lock:
             device = self._device(device_id)
-            await self._request(
-                "PUT",
-                self._path(device, "hold"),
-                {"Status": "TemporaryHold", "HoldUntil": until},
-            )
+            for status, value in (
+                ("HoldUntil", until),
+                ("TemporaryHold", until[:5]),
+                ("HoldUntil", until[:5]),
+            ):
+                try:
+                    await self._request(
+                        "PUT", self._path(device, "hold"), {"Status": status, "HoldUntil": value}
+                    )
+                except CommandError as err:
+                    rejected.append(f"{status} {value}: {err}")
+                    continue
+                _LOGGER.warning(
+                    "Timed hold accepted with Status=%s HoldUntil=%s; rejected before: %s",
+                    status, value, rejected,
+                )
+                return
+        raise CommandError(" | ".join(rejected))
 
     def _hot_water_device(self, device_id: str) -> Thermostat:
         device = self._device(device_id)

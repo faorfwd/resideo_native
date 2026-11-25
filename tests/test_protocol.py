@@ -528,8 +528,23 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(setpoint[1].endswith("/thermostat/HeatSetpoint"))
         self.assertEqual(hold[:2], ("PUT", "/api/locations/123/devices/T6-test/hold"))
         self.assertEqual(
-            json.loads(hold[3]), {"Status": "TemporaryHold", "HoldUntil": "14:30:00"}
+            json.loads(hold[3]), {"Status": "HoldUntil", "HoldUntil": "14:30:00"}
         )
+
+    async def test_rejected_timed_hold_is_released(self):
+        await self.client.update()
+        sent = []
+
+        async def request(method, path, body=None):
+            sent.append(body)
+            if body.get("HoldUntil"):
+                raise CommandError("rejected")
+
+        with patch.object(self.client, "_request", request):
+            with self.assertRaises(CommandError):
+                await self.client.set_temperature_until("T6-test", "14:30:00", heat=22.5)
+        self.assertEqual(len(sent), 5)
+        self.assertEqual(sent[-1], {"Status": "NoHold"})
 
     async def test_invalid_and_unsupported_commands_never_reach_network(self):
         await self.client.update()

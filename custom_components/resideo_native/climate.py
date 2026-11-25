@@ -325,7 +325,13 @@ class ResideoThermostat(ScheduleEntityMixin, CoordinatorEntity[ResideoCoordinato
         if self.hvac_mode not in (HVACMode.HEAT, HVACMode.COOL) or kind is None:
             raise HomeAssistantError("A timed hold requires heating or cooling mode")
         # The thermostat takes a wall-clock time; assumes it shares HA's time zone.
-        until = (dt_util.now() + duration).strftime("%H:%M:00")
+        # The app offers 10-minute steps; round up so the hold is never shorter.
+        end = dt_util.now() + duration
+        step = timedelta(minutes=10)
+        excess = timedelta(minutes=end.minute % 10, seconds=end.second, microseconds=end.microsecond)
+        if excess:
+            end += step - excess
+        until = end.strftime("%H:%M:00")
         await self.coordinator.async_command(
             self.coordinator.client.set_temperature_until(
                 self.device_id, until, **{kind: temperature}

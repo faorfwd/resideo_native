@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.6b2 — Timed hold diagnostics
+
+- Try alternative timed-hold bodies, report Resideo's redacted validation text, release the hold on failure, and round the end time up to 10 minutes.
+
 ## 0.3.6b1 — Timed heating hold
 
 - Add the `resideo_native.set_hold_until` action: a temporary setpoint with a duration, ended by the thermostat itself.
