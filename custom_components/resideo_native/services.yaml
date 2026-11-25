@@ -21,6 +21,30 @@ cancel_hot_water_boost:
       integration: resideo_native
       domain: water_heater
 
+set_hold_until:
+  name: Hold temperature for a duration
+  description: Set a temporary setpoint that the thermostat itself ends after the given duration, then returns to its schedule.
+  target:
+    entity:
+      integration: resideo_native
+      domain: climate
+  fields:
+    temperature:
+      name: Temperature
+      required: true
+      selector:
+        number:
+          min: 5
+          max: 35
+          step: 0.5
+          mode: box
+    duration:
+      name: Duration
+      description: From 1 minute to 12 hours.
+      required: true
+      selector:
+        duration:
+
 get_heating_schedule:
   name: Get heating schedule
   description: Fetch the current cloud schedule and revision. Times use the thermostat's local time and temperatures use its display unit.

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add the `resideo_native.set_hold_until` action: a temporary setpoint with a duration, ended by the thermostat itself.
+
 ## 0.3.5 — Schedule time dropdowns and individual room-sensor readings
 
 - Use hour and minute dropdowns in Timed heating, hot water and Geofencing Sleep schedules. The Timed setup popup stacks fields on narrow screens so both digits stay visible. [PR #10 by Alex-ley-scrub](https://github.com/Kosztyk/resideo_native/pull/10)

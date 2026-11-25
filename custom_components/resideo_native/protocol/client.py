@@ -28,6 +28,7 @@ from .errors import (
     InteractionRequired,
     InvalidResponse,
     RateLimited,
+    ResideoError,
 )
 from .hot_water import DHW_BOOST_MINUTES
 from .rooms import (
@@ -186,7 +187,7 @@ class NativeClient(ScheduleClientMixin, ScheduleModesMixin):
                     if not 200 <= response.status < 300:
                         if method != "GET":
                             message = f"Resideo rejected the command (HTTP {response.status})"
-                            if path.endswith(("/ThermostatSchedule", "/dhw/schedule", "/Schedule/Status")):
+                            if path.endswith(("/ThermostatSchedule", "/dhw/schedule", "/Schedule/Status", "/hold")):
                                 secrets = [token, self.account_id, self.username]
                                 for device in self.devices.values():
                                     secrets.extend([device.device_id, device.location_id, device.name])
@@ -410,6 +411,33 @@ class NativeClient(ScheduleClientMixin, ScheduleModesMixin):
             if status == "TemporaryHold" and isinstance(next_period, str) and next_period:
                 body["HoldUntil"] = next_period
             await self._request("PUT", self._path(device, "hold"), body)
+
+    async def set_temperature_until(
+        self,
+        device_id: str,
+        until: str,
+        *,
+        heat: float | None = None,
+        cool: float | None = None,
+    ) -> None:
+        # A setpoint write has no end time, so the hold is bounded by a second call.
+        await self.set_temperature(device_id, heat=heat, cool=cool, hold="TemporaryHold")
+        try:
+            async with self._command_lock:
+                device = self._device(device_id)
+                # An arbitrary end time needs HoldUntil; TemporaryHold is rejected with HTTP 400.
+                await self._request(
+                    "PUT",
+                    self._path(device, "hold"),
+                    {"Status": "HoldUntil", "HoldUntil": until},
+                )
+        except ResideoError:
+            # Never leave the new setpoint held until the next schedule period.
+            try:
+                await self.set_hold(device_id, "NoHold")
+            except ResideoError:
+                _LOGGER.warning("Could not release the hold after a failed timed hold")
+            raise
 
     def _hot_water_device(self, device_id: str) -> Thermostat:
         device = self._device(device_id)

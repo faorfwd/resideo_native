@@ -168,6 +168,40 @@ async def test_climate_services_call_the_shared_client(hass, entry, client):
     client.set_hold.assert_awaited_once_with("T6-test", "NoHold")
 
 
+async def test_set_hold_until_converts_duration_to_wall_clock(hass, entry, client, freezer):
+    await hass.config.async_set_time_zone("UTC")
+    freezer.move_to("2026-01-01 23:50:30+00:00")
+    client.set_temperature_until = AsyncMock()
+    await hass.services.async_call(
+        "resideo_native",
+        "set_hold_until",
+        {
+            "entity_id": thermostat_state(hass).entity_id,
+            "temperature": 22.5,
+            "duration": {"minutes": 30},
+        },
+        blocking=True,
+    )
+    client.set_temperature_until.assert_awaited_once_with("T6-test", "00:30:00", heat=22.5)
+
+
+async def test_set_hold_until_keeps_real_duration_across_dst(hass, entry, client, freezer):
+    await hass.config.async_set_time_zone("Europe/Zurich")
+    freezer.move_to("2026-03-29 00:50:00+00:00")
+    client.set_temperature_until = AsyncMock()
+    await hass.services.async_call(
+        "resideo_native",
+        "set_hold_until",
+        {
+            "entity_id": thermostat_state(hass).entity_id,
+            "temperature": 22.5,
+            "duration": {"minutes": 30},
+        },
+        blocking=True,
+    )
+    client.set_temperature_until.assert_awaited_once_with("T6-test", "03:20:00", heat=22.5)
+
+
 async def test_unsupported_cooling_is_not_sent(hass, entry, client):
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call(
